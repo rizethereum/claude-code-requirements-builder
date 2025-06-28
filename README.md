@@ -1,6 +1,6 @@
 # Claude Requirements Gathering System
 
-An intelligent requirements gathering system for Claude Code that progressively builds context through automated discovery, asks simple yes/no questions, and generates comprehensive requirements documentation.
+An intelligent requirements gathering system that combines slash commands and MCP server for Claude Code. It progressively builds context through automated discovery, asks simple yes/no questions, and generates comprehensive requirements documentation.
 
 ## 🎯 Overview
 
@@ -10,8 +10,49 @@ This system transforms the requirements gathering process by:
 - **Two-Phase Questioning**: 5 high-level questions for context, then 5 expert questions after code analysis  
 - **Automated Documentation**: Generates comprehensive specs with specific file paths and patterns
 - **Product Manager Friendly**: No code knowledge required to answer questions
+- **MCP Server Support**: Available as both slash commands and MCP tools
 
 ## 🚀 Quick Start
+
+### Option 1: Using MCP Server (Recommended)
+
+**Quick Install - Direct from GitHub:**
+```json
+{
+  "mcpServers": {
+    "claude-code-requirements": {
+      "command": "npx",
+      "args": ["github:ulasbilgen/claude-code-requirements-builder"]
+    }
+  }
+}
+```
+
+**Or install from npm:**
+```bash
+npx claude-code-requirements
+```
+
+```json
+{
+  "mcpServers": {
+    "claude-code-requirements": {
+      "command": "npx",
+      "args": ["claude-code-requirements"]
+    }
+  }
+}
+```
+
+Then use the MCP tools:
+- `requirements-start` - Begin gathering requirements
+- `requirements-status` - Check progress  
+- `requirements-current` - View active requirement
+- `requirements-end` - Complete/cancel session
+- `requirements-list` - List all requirements
+- `requirements-remind` - Get workflow reminder
+
+### Option 2: Using Slash Commands
 
 ```bash
 # Start gathering requirements for a new feature
@@ -205,9 +246,35 @@ Every question includes an intelligent default based on:
 
 ## 🔧 Installation
 
+### MCP Server Installation (Recommended)
+
+The easiest way to use this system:
+
+```bash
+# Install globally
+npm install -g claude-code-requirements
+
+# Or use directly with npx
+npx claude-code-requirements
+```
+
+Add to your Claude Desktop configuration:
+```json
+{
+  "mcpServers": {
+    "claude-code-requirements": {
+      "command": "npx",
+      "args": ["claude-code-requirements"]
+    }
+  }
+}
+```
+
+### Slash Commands Installation
+
 1. Clone this repository:
 ```bash
-git clone https://github.com/rizethereum/claude-code-requirements-builder.git
+git clone https://github.com/ulasbilgen/claude-code-requirements-builder.git
 ```
 
 2. Copy the commands to your project:
