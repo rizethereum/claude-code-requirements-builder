@@ -16,23 +16,15 @@ This system transforms the requirements gathering process by:
 
 ### Option 1: Using MCP Server (Recommended)
 
-**Quick Install - Direct from GitHub:**
-```json
-{
-  "mcpServers": {
-    "claude-code-requirements": {
-      "command": "npx",
-      "args": ["github:ulasbilgen/claude-code-requirements-builder"]
-    }
-  }
-}
-```
-
-**Or install from npm:**
+**Install via npm:**
 ```bash
+# Test it works
 npx claude-code-requirements
+
+# Add to Claude Desktop config
 ```
 
+Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
@@ -248,14 +240,14 @@ Every question includes an intelligent default based on:
 
 ### MCP Server Installation (Recommended)
 
-The easiest way to use this system:
+Install the MCP server via npm:
 
 ```bash
-# Install globally
-npm install -g claude-code-requirements
-
-# Or use directly with npx
+# Test it works
 npx claude-code-requirements
+
+# Or install globally  
+npm install -g claude-code-requirements
 ```
 
 Add to your Claude Desktop configuration:
