@@ -207,7 +207,7 @@ Every question includes an intelligent default based on:
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/claude-requirements.git
+git clone https://github.com/rizethereum/claude-code-requirements-builder.git
 ```
 
 2. Copy the commands to your project:
