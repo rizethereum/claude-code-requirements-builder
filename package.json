@@ -1,6 +1,6 @@
 {
   "name": "claude-code-requirements",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "MCP server for Claude Code requirements gathering workflow",
   "main": "dist/index.js",
   "type": "module",

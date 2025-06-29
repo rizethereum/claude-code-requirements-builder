@@ -22,12 +22,17 @@ const DEFAULT_SETTINGS: ServerSettings = {
 
 // Load settings from file or use defaults
 async function loadSettings(): Promise<ServerSettings> {
-  const settingsPath = join(process.cwd(), 'requirements', '.mcp-settings.json');
+  const requirementsDir = join(process.cwd(), 'requirements');
+  const settingsPath = join(requirementsDir, '.mcp-settings.json');
+  
   try {
+    // Ensure requirements directory exists before reading
+    await ensureDir(requirementsDir);
     const content = await fs.readFile(settingsPath, 'utf-8');
     const parsed = JSON.parse(content);
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
+    // If file doesn't exist or can't be read, return defaults
     return DEFAULT_SETTINGS;
   }
 }
@@ -43,7 +48,7 @@ async function saveSettings(settings: ServerSettings): Promise<void> {
 // Create the MCP server
 const server = new McpServer({
   name: "claude-code-requirements",
-  version: "1.0.0"
+  version: "1.2.1"
 });
 
 // Helper functions for file operations
