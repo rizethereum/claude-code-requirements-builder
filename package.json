@@ -1,6 +1,6 @@
 {
   "name": "claude-code-requirements",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for Claude Code requirements gathering workflow",
   "main": "dist/index.js",
   "type": "module",
@@ -36,7 +36,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ulasbilgen/claude-code-requirements-builder.git"
+    "url": "git+https://github.com/ulasbilgen/claude-code-requirements-builder.git"
   },
   "bugs": {
     "url": "https://github.com/ulasbilgen/claude-code-requirements-builder/issues"

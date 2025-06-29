@@ -6,6 +6,29 @@ import { promises as fs } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_SETTINGS = {
+    discoveryQuestions: 5,
+    expertQuestions: 5
+};
+// Load settings from file or use defaults
+async function loadSettings() {
+    const settingsPath = join(process.cwd(), 'requirements', '.mcp-settings.json');
+    try {
+        const content = await fs.readFile(settingsPath, 'utf-8');
+        const parsed = JSON.parse(content);
+        return { ...DEFAULT_SETTINGS, ...parsed };
+    }
+    catch {
+        return DEFAULT_SETTINGS;
+    }
+}
+// Save settings to file
+async function saveSettings(settings) {
+    const requirementsDir = join(process.cwd(), 'requirements');
+    await ensureDir(requirementsDir);
+    const settingsPath = join(requirementsDir, '.mcp-settings.json');
+    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+}
 // Create the MCP server
 const server = new McpServer({
     name: "claude-code-requirements",
@@ -92,6 +115,8 @@ server.registerTool("requirements-start", {
         const folderName = createTimestampFolder(request);
         const requirementPath = join(process.cwd(), 'requirements', folderName);
         await ensureDir(requirementPath);
+        // Load settings to determine question counts
+        const settings = await loadSettings();
         // Create initial files
         const initialRequestContent = `# Initial Request\n\n**Timestamp:** ${new Date().toISOString()}\n\n**Request:** ${request}\n\n---\n\nThis is the starting point for requirements gathering session: ${folderName}\n`;
         const metadata = {
@@ -101,20 +126,26 @@ server.registerTool("requirements-start", {
             status: "active",
             phase: "discovery",
             progress: {
-                discovery: { answered: 0, total: 5 },
-                detail: { answered: 0, total: 0 }
+                discovery: { answered: 0, total: settings.discoveryQuestions },
+                detail: { answered: 0, total: settings.expertQuestions }
             },
             contextFiles: [],
-            relatedFeatures: []
+            relatedFeatures: [],
+            settings: settings
         };
         await fs.writeFile(join(requirementPath, '00-initial-request.md'), initialRequestContent);
         await fs.writeFile(join(requirementPath, 'metadata.json'), JSON.stringify(metadata, null, 2));
         // Set as current requirement
         await setCurrentRequirement(folderName);
+        // Generate and save discovery questions
+        const discoveryQuestions = generateDiscoveryQuestions(settings.discoveryQuestions);
+        const questionsContent = `# Discovery Questions\n\n**Generated:** ${new Date().toISOString()}\n**Total Questions:** ${settings.discoveryQuestions}\n\n` +
+            discoveryQuestions.map((q, index) => `## Q${index + 1}: ${q.question}\n**Default if unknown:** ${q.defaultValue ? 'Yes' : 'No'} (${q.reason})\n`).join('\n');
+        await fs.writeFile(join(requirementPath, '01-discovery-questions.md'), questionsContent);
         return {
             content: [{
                     type: "text",
-                    text: `✅ Requirements gathering started for: "${request}"\n\n📁 Created folder: requirements/${folderName}\n📝 Session is now active\n\n**Next Steps:**\n1. Use 'requirements-status' to see progress\n2. The system will guide you through the 5-phase workflow:\n   - Phase 1: Setup & Codebase Analysis\n   - Phase 2: Context Discovery Questions  \n   - Phase 3: Targeted Context Gathering\n   - Phase 4: Expert Requirements Questions\n   - Phase 5: Requirements Documentation\n\n**Current Phase:** Discovery (5 yes/no questions about problem space)`
+                    text: `✅ Requirements gathering started for: "${request}"\n\n📁 Created folder: requirements/${folderName}\n📝 Session is now active\n\n**Settings:**\n- Discovery Questions: ${settings.discoveryQuestions}\n- Expert Questions: ${settings.expertQuestions}\n\n**Next Steps:**\n1. Use 'requirements-status' to continue with discovery questions\n2. The system will guide you through the 5-phase workflow:\n   - Phase 1: Setup & Codebase Analysis ✅\n   - Phase 2: Context Discovery Questions (${settings.discoveryQuestions} questions)\n   - Phase 3: Targeted Context Gathering\n   - Phase 4: Expert Requirements Questions (${settings.expertQuestions} questions)\n   - Phase 5: Requirements Documentation\n\n**Current Phase:** Discovery - Ready to ask ${settings.discoveryQuestions} yes/no questions`
                 }]
         };
     }
@@ -130,8 +161,8 @@ server.registerTool("requirements-start", {
 });
 // Tool: requirements-status  
 server.registerTool("requirements-status", {
-    title: "Check Requirements Status",
-    description: "Check the status and progress of the current requirements gathering session",
+    title: "Check Requirements Status and Continue",
+    description: "Check the status and progress of the current requirements gathering session and continue the workflow",
     inputSchema: {}
 }, async () => {
     try {
@@ -157,13 +188,139 @@ server.registerTool("requirements-status", {
         }
         const metadataContent = await fs.readFile(metadataPath, 'utf-8');
         const metadata = JSON.parse(metadataContent);
+        // If we're in discovery phase and have unanswered questions, continue asking
+        if (metadata.phase === "discovery" && metadata.progress.discovery.answered < metadata.progress.discovery.total) {
+            const currentQuestionIndex = metadata.progress.discovery.answered;
+            const settings = metadata.settings || await loadSettings();
+            const discoveryQuestions = generateDiscoveryQuestions(settings.discoveryQuestions);
+            const currentQuestion = discoveryQuestions[currentQuestionIndex];
+            // Ask the current question using elicitation
+            const answer = await askQuestion(server, `Discovery Question ${currentQuestionIndex + 1}/${metadata.progress.discovery.total}: ${currentQuestion.question}`, currentQuestion.defaultValue, currentQuestion.reason);
+            // Update progress
+            metadata.progress.discovery.answered++;
+            metadata.lastUpdated = new Date().toISOString();
+            // Save the answer to the answers file
+            const answersPath = join(requirementPath, '02-discovery-answers.md');
+            let answersContent = '';
+            if (await fileExists(answersPath)) {
+                answersContent = await fs.readFile(answersPath, 'utf-8');
+            }
+            else {
+                answersContent = `# Discovery Answers\n\n**Started:** ${new Date().toISOString()}\n\n`;
+            }
+            answersContent += `## Q${currentQuestionIndex + 1}: ${currentQuestion.question}\n**Answer:** ${answer ? 'Yes' : 'No'}\n**Reasoning:** ${currentQuestion.reason}\n\n`;
+            await fs.writeFile(answersPath, answersContent);
+            await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+            // Check if discovery phase is complete
+            if (metadata.progress.discovery.answered >= metadata.progress.discovery.total) {
+                metadata.phase = "context";
+                await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+                return {
+                    content: [{
+                            type: "text",
+                            text: `✅ **Discovery Phase Complete!**\n\nAnswered: ${answer ? 'Yes' : 'No'} to "${currentQuestion.question}"\n\n🎉 All ${metadata.progress.discovery.total} discovery questions completed!\n\n**Next Phase:** Context Gathering\n- The system will now analyze the codebase based on your answers\n- Use 'requirements-status' again to continue to expert questions`
+                        }]
+                };
+            }
+            else {
+                return {
+                    content: [{
+                            type: "text",
+                            text: `✅ **Question Answered**\n\nQ${currentQuestionIndex + 1}: ${currentQuestion.question}\n**Answer:** ${answer ? 'Yes' : 'No'}\n\n**Progress:** ${metadata.progress.discovery.answered}/${metadata.progress.discovery.total} discovery questions completed\n\nUse 'requirements-status' again to continue with the next question.`
+                        }]
+                };
+            }
+        }
+        // If in context phase, move to detail questions
+        if (metadata.phase === "context") {
+            metadata.phase = "detail";
+            metadata.lastUpdated = new Date().toISOString();
+            await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+            return {
+                content: [{
+                        type: "text",
+                        text: `📋 **Context Phase Complete**\n\nMoving to Expert Questions phase...\n\n**Next:** ${metadata.progress.detail.total} expert questions about system behavior\n\nUse 'requirements-status' again to start expert questions.`
+                    }]
+            };
+        }
+        // If we're in detail phase and have unanswered questions, continue asking
+        if (metadata.phase === "detail" && metadata.progress.detail.answered < metadata.progress.detail.total) {
+            const currentQuestionIndex = metadata.progress.detail.answered;
+            // For now, use basic expert questions - in a full implementation, these would be generated based on context analysis
+            const expertQuestions = [
+                {
+                    question: "Should this feature be accessible to all user roles?",
+                    defaultValue: false,
+                    reason: "role-based access is more common for new features"
+                },
+                {
+                    question: "Will this feature require database schema changes?",
+                    defaultValue: true,
+                    reason: "most new features need new data structures"
+                },
+                {
+                    question: "Should this feature have comprehensive error handling and validation?",
+                    defaultValue: true,
+                    reason: "robust error handling is a best practice"
+                },
+                {
+                    question: "Will this feature need to be backwards compatible with existing APIs?",
+                    defaultValue: true,
+                    reason: "maintaining API compatibility is usually required"
+                },
+                {
+                    question: "Should this feature include comprehensive logging and monitoring?",
+                    defaultValue: true,
+                    reason: "observability is critical for production features"
+                }
+            ].slice(0, metadata.progress.detail.total);
+            const currentQuestion = expertQuestions[currentQuestionIndex];
+            // Ask the current expert question using elicitation
+            const answer = await askQuestion(server, `Expert Question ${currentQuestionIndex + 1}/${metadata.progress.detail.total}: ${currentQuestion.question}`, currentQuestion.defaultValue, currentQuestion.reason);
+            // Update progress
+            metadata.progress.detail.answered++;
+            metadata.lastUpdated = new Date().toISOString();
+            // Save the answer to the detail answers file
+            const detailAnswersPath = join(requirementPath, '05-detail-answers.md');
+            let detailAnswersContent = '';
+            if (await fileExists(detailAnswersPath)) {
+                detailAnswersContent = await fs.readFile(detailAnswersPath, 'utf-8');
+            }
+            else {
+                detailAnswersContent = `# Expert Question Answers\n\n**Started:** ${new Date().toISOString()}\n\n`;
+            }
+            detailAnswersContent += `## Q${currentQuestionIndex + 1}: ${currentQuestion.question}\n**Answer:** ${answer ? 'Yes' : 'No'}\n**Reasoning:** ${currentQuestion.reason}\n\n`;
+            await fs.writeFile(detailAnswersPath, detailAnswersContent);
+            await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+            // Check if detail phase is complete
+            if (metadata.progress.detail.answered >= metadata.progress.detail.total) {
+                metadata.phase = "complete";
+                metadata.status = "completed";
+                await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+                return {
+                    content: [{
+                            type: "text",
+                            text: `✅ **Expert Questions Complete!**\n\nAnswered: ${answer ? 'Yes' : 'No'} to "${currentQuestion.question}"\n\n🎉 All ${metadata.progress.detail.total} expert questions completed!\n\n**Status:** Requirements gathering complete\n**Next:** Use 'requirements-end' to finalize the session\n\nAll answers have been saved and the requirements specification can now be generated.`
+                        }]
+                };
+            }
+            else {
+                return {
+                    content: [{
+                            type: "text",
+                            text: `✅ **Expert Question Answered**\n\nQ${currentQuestionIndex + 1}: ${currentQuestion.question}\n**Answer:** ${answer ? 'Yes' : 'No'}\n\n**Progress:** ${metadata.progress.detail.answered}/${metadata.progress.detail.total} expert questions completed\n\nUse 'requirements-status' again to continue with the next question.`
+                        }]
+                };
+            }
+        }
+        // Show status for completed or other phases
         const phaseDescriptions = {
             discovery: "Context Discovery Questions (understanding problem space)",
             context: "Targeted Context Gathering (autonomous codebase analysis)",
             detail: "Expert Requirements Questions (detailed system behavior)",
             complete: "Requirements Documentation (comprehensive spec generation)"
         };
-        let statusText = `📋 **Active Requirements Session**\n\n`;
+        let statusText = `📋 **Requirements Session Status**\n\n`;
         statusText += `**Session:** ${currentRequirement}\n`;
         statusText += `**Started:** ${new Date(metadata.started).toLocaleString()}\n`;
         statusText += `**Last Updated:** ${new Date(metadata.lastUpdated).toLocaleString()}\n`;
@@ -173,8 +330,8 @@ server.registerTool("requirements-status", {
         if (metadata.progress.discovery) {
             statusText += `- Discovery Questions: ${metadata.progress.discovery.answered}/${metadata.progress.discovery.total} answered\n`;
         }
-        if (metadata.progress.detail && metadata.progress.detail.total > 0) {
-            statusText += `- Detail Questions: ${metadata.progress.detail.answered}/${metadata.progress.detail.total} answered\n`;
+        if (metadata.progress.detail) {
+            statusText += `- Expert Questions: ${metadata.progress.detail.answered}/${metadata.progress.detail.total} answered\n`;
         }
         if (metadata.contextFiles && metadata.contextFiles.length > 0) {
             statusText += `\n**Analyzed Files:** ${metadata.contextFiles.length} files\n`;
@@ -182,7 +339,6 @@ server.registerTool("requirements-status", {
         statusText += `\n**Available Actions:**\n`;
         statusText += `- 'requirements-current' - View detailed session info\n`;
         statusText += `- 'requirements-end' - Complete or cancel session\n`;
-        statusText += `- 'requirements-remind' - Get workflow guidance\n`;
         return {
             content: [{
                     type: "text",
@@ -467,6 +623,137 @@ Use 'requirements-status' to see your current phase and progress.`;
             }]
     };
 });
+// Tool: requirements-settings
+server.registerTool("requirements-settings", {
+    title: "Configure Requirements Settings",
+    description: "Configure the number of discovery and expert questions",
+    inputSchema: {
+        action: z.enum(["get", "set"]).describe("Action to perform: get (view current settings) or set (update settings)"),
+        discoveryQuestions: z.number().min(1).max(20).optional().describe("Number of discovery questions (1-20)"),
+        expertQuestions: z.number().min(1).max(20).optional().describe("Number of expert questions (1-20)")
+    }
+}, async ({ action, discoveryQuestions, expertQuestions }) => {
+    try {
+        if (action === "get") {
+            const settings = await loadSettings();
+            return {
+                content: [{
+                        type: "text",
+                        text: `📋 **Current Settings**\n\n**Discovery Questions:** ${settings.discoveryQuestions}\n**Expert Questions:** ${settings.expertQuestions}\n\nTo change settings, use:\n- requirements-settings with action="set" and new values`
+                    }]
+            };
+        }
+        else if (action === "set") {
+            const currentSettings = await loadSettings();
+            const newSettings = {
+                discoveryQuestions: discoveryQuestions ?? currentSettings.discoveryQuestions,
+                expertQuestions: expertQuestions ?? currentSettings.expertQuestions
+            };
+            await saveSettings(newSettings);
+            return {
+                content: [{
+                        type: "text",
+                        text: `✅ **Settings Updated**\n\n**Discovery Questions:** ${newSettings.discoveryQuestions}\n**Expert Questions:** ${newSettings.expertQuestions}\n\nSettings saved to requirements/.mcp-settings.json`
+                    }]
+            };
+        }
+        return {
+            content: [{
+                    type: "text",
+                    text: "❌ Invalid action specified"
+                }],
+            isError: true
+        };
+    }
+    catch (error) {
+        return {
+            content: [{
+                    type: "text",
+                    text: `❌ Error managing settings: ${error instanceof Error ? error.message : 'Unknown error'}`
+                }],
+            isError: true
+        };
+    }
+});
+// Helper function to ask a single question using elicitation
+async function askQuestion(mcpServer, questionText, defaultValue, defaultReason) {
+    const result = await mcpServer.server.elicitInput({
+        message: questionText,
+        requestedSchema: {
+            type: "object",
+            properties: {
+                answer: {
+                    type: "boolean",
+                    title: "Answer",
+                    description: `Default: ${defaultValue ? 'Yes' : 'No'} (${defaultReason})`,
+                    default: defaultValue
+                }
+            },
+            required: ["answer"]
+        }
+    });
+    if (result.action === "accept" && result.content?.answer !== undefined) {
+        return result.content.answer;
+    }
+    // If user cancels or rejects, use default
+    return defaultValue;
+}
+// Helper function to generate discovery questions
+function generateDiscoveryQuestions(count) {
+    const allQuestions = [
+        {
+            question: "Will users interact with this feature through a visual interface?",
+            defaultValue: true,
+            reason: "most features have some UI component"
+        },
+        {
+            question: "Does this feature need to work on mobile devices?",
+            defaultValue: true,
+            reason: "mobile-first is standard practice"
+        },
+        {
+            question: "Will this feature handle sensitive or private user data?",
+            defaultValue: true,
+            reason: "better to be secure by default"
+        },
+        {
+            question: "Do users currently have a workaround for this problem?",
+            defaultValue: false,
+            reason: "assuming this solves a new need"
+        },
+        {
+            question: "Will this feature need to work offline?",
+            defaultValue: false,
+            reason: "most features require connectivity"
+        },
+        {
+            question: "Will this feature require real-time updates or notifications?",
+            defaultValue: false,
+            reason: "real-time features add complexity"
+        },
+        {
+            question: "Does this feature need to integrate with external APIs or services?",
+            defaultValue: false,
+            reason: "internal features are more common"
+        },
+        {
+            question: "Will this feature need to scale to handle many concurrent users?",
+            defaultValue: true,
+            reason: "better to plan for scale upfront"
+        },
+        {
+            question: "Does this feature require user authentication or authorization?",
+            defaultValue: true,
+            reason: "most features need some level of access control"
+        },
+        {
+            question: "Will this feature need to maintain audit logs or activity history?",
+            defaultValue: false,
+            reason: "audit logs are typically for specific use cases"
+        }
+    ];
+    return allQuestions.slice(0, count);
+}
 // Connect the server
 async function main() {
     const transport = new StdioServerTransport();
