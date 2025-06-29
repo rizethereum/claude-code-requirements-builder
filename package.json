@@ -36,10 +36,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ulasbilgen/claude-code-requirements-builder.git"
+    "url": "git+https://github.com/amittell/claude-code-requirements-builder.git"
   },
   "bugs": {
-    "url": "https://github.com/ulasbilgen/claude-code-requirements-builder/issues"
+    "url": "https://github.com/amittell/claude-code-requirements-builder/issues"
   },
-  "homepage": "https://github.com/ulasbilgen/claude-code-requirements-builder#readme"
+  "homepage": "https://github.com/amittell/claude-code-requirements-builder#readme"
 }
