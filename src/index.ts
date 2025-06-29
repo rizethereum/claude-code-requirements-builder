@@ -758,47 +758,87 @@ server.registerTool(
   "requirements-settings",
   {
     title: "Configure Requirements Settings",
-    description: "Configure the number of discovery and expert questions",
-    inputSchema: {
-      action: z.enum(["get", "set"]).describe("Action to perform: get (view current settings) or set (update settings)"),
-      discoveryQuestions: z.number().min(1).max(20).optional().describe("Number of discovery questions (1-20)"),
-      expertQuestions: z.number().min(1).max(20).optional().describe("Number of expert questions (1-20)")
-    }
+    description: "Interactively configure the number of discovery and expert questions",
+    inputSchema: {}
   },
-  async ({ action, discoveryQuestions, expertQuestions }) => {
+  async () => {
     try {
-      if (action === "get") {
-        const settings = await loadSettings();
+      const currentSettings = await loadSettings();
+      
+      // Show current settings first
+      let resultMessage = `📋 **Current Settings**\n\n**Discovery Questions:** ${currentSettings.discoveryQuestions}\n**Expert Questions:** ${currentSettings.expertQuestions}\n\n`;
+      
+      // Ask for discovery questions count
+      const discoveryResult = await server.server.elicitInput({
+        message: `Discovery Questions (current: ${currentSettings.discoveryQuestions})`,
+        requestedSchema: {
+          type: "object",
+          properties: {
+            count: {
+              type: "number",
+              title: "Number of Discovery Questions",
+              description: `Current: ${currentSettings.discoveryQuestions}. Press Enter to keep current value, or enter a number between 1-20`,
+              default: currentSettings.discoveryQuestions,
+              minimum: 1,
+              maximum: 20
+            }
+          },
+          required: ["count"]
+        }
+      });
+      
+      const newDiscoveryCount = (discoveryResult.action === "accept" && discoveryResult.content?.count) 
+        ? discoveryResult.content.count as number 
+        : currentSettings.discoveryQuestions;
+      
+      // Ask for expert questions count  
+      const expertResult = await server.server.elicitInput({
+        message: `Expert Questions (current: ${currentSettings.expertQuestions})`,
+        requestedSchema: {
+          type: "object",
+          properties: {
+            count: {
+              type: "number", 
+              title: "Number of Expert Questions",
+              description: `Current: ${currentSettings.expertQuestions}. Press Enter to keep current value, or enter a number between 1-20`,
+              default: currentSettings.expertQuestions,
+              minimum: 1,
+              maximum: 20
+            }
+          },
+          required: ["count"]
+        }
+      });
+      
+      const newExpertCount = (expertResult.action === "accept" && expertResult.content?.count)
+        ? expertResult.content.count as number
+        : currentSettings.expertQuestions;
+      
+      // Check if anything changed
+      if (newDiscoveryCount === currentSettings.discoveryQuestions && newExpertCount === currentSettings.expertQuestions) {
         return {
           content: [{
             type: "text",
-            text: `📋 **Current Settings**\n\n**Discovery Questions:** ${settings.discoveryQuestions}\n**Expert Questions:** ${settings.expertQuestions}\n\nTo change settings, use:\n- requirements-settings with action="set" and new values`
-          }]
-        };
-      } else if (action === "set") {
-        const currentSettings = await loadSettings();
-        const newSettings: ServerSettings = {
-          discoveryQuestions: discoveryQuestions ?? currentSettings.discoveryQuestions,
-          expertQuestions: expertQuestions ?? currentSettings.expertQuestions
-        };
-        
-        await saveSettings(newSettings);
-        
-        return {
-          content: [{
-            type: "text",
-            text: `✅ **Settings Updated**\n\n**Discovery Questions:** ${newSettings.discoveryQuestions}\n**Expert Questions:** ${newSettings.expertQuestions}\n\nSettings saved to requirements/.mcp-settings.json`
+            text: `📋 **Settings Unchanged**\n\n**Discovery Questions:** ${currentSettings.discoveryQuestions}\n**Expert Questions:** ${currentSettings.expertQuestions}\n\nNo changes were made to the settings.`
           }]
         };
       }
       
+      // Save new settings
+      const newSettings: ServerSettings = {
+        discoveryQuestions: newDiscoveryCount,
+        expertQuestions: newExpertCount
+      };
+      
+      await saveSettings(newSettings);
+      
       return {
         content: [{
           type: "text",
-          text: "❌ Invalid action specified"
-        }],
-        isError: true
+          text: `✅ **Settings Updated**\n\n**Discovery Questions:** ${newSettings.discoveryQuestions} ${newSettings.discoveryQuestions !== currentSettings.discoveryQuestions ? '(changed)' : ''}\n**Expert Questions:** ${newSettings.expertQuestions} ${newSettings.expertQuestions !== currentSettings.expertQuestions ? '(changed)' : ''}\n\nSettings saved to requirements/.mcp-settings.json`
+        }]
       };
+      
     } catch (error) {
       return {
         content: [{
