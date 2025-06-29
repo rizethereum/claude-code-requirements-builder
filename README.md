@@ -10,6 +10,7 @@ This system transforms the requirements gathering process by:
 - **Two-Phase Questioning**: 5 high-level questions for context, then 5 expert questions after code analysis  
 - **Automated Documentation**: Generates comprehensive specs with specific file paths and patterns
 - **Product Manager Friendly**: No code knowledge required to answer questions
+- **Complete Development Loop**: New `/synthesize` command transforms requirements into implementation
 
 ## 🚀 Quick Start
 
@@ -29,6 +30,9 @@ This system transforms the requirements gathering process by:
 # End current requirement gathering
 /requirements-end
 
+# Generate implementation plan from completed requirements
+/synthesize
+
 # Quick reminder if AI strays off course
 /remind
 ```
@@ -43,7 +47,8 @@ claude-requirements/
 │   ├── requirements-current.md  # View active requirement
 │   ├── requirements-end.md      # Finalize requirement
 │   ├── requirements-list.md     # List all requirements
-│   └── requirements-remind.md   # Remind AI of rules
+│   ├── requirements-remind.md   # Remind AI of rules
+│   └── synthesize.md           # Generate implementation from requirements
 │
 ├── requirements/                 # Requirement documentation storage
 │   ├── .current-requirement     # Tracks active requirement
@@ -164,6 +169,27 @@ Reminds AI to follow requirements gathering rules.
 - Asks open-ended questions
 - Starts implementing code
 - Asks multiple questions at once
+
+### `/synthesize`
+Transforms completed requirements into actionable implementation plans.
+
+**Features:**
+- Finds most recent completed requirement automatically
+- Generates phased implementation plan
+- Creates tracked todo list with specific tasks
+- Maps tasks to requirement IDs (FR/TR)
+- Begins actual implementation with progress tracking
+
+**Example:**
+```
+/synthesize
+```
+
+**Output:**
+- Implementation plan document
+- Todo list with task IDs
+- Automatic loading into Claude's task tracker
+- Begins implementation immediately
 
 ## 🎯 Features
 
