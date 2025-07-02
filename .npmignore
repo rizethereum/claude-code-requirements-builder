@@ -1,0 +1,12 @@
+src/
+tsconfig.json
+*.test.ts
+.git/
+.github/
+examples/
+commands/
+CLAUDE.md
+requirements/
+node_modules/
+.DS_Store
+*.log

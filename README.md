@@ -1,6 +1,6 @@
 # Claude Requirements Gathering System
 
-An intelligent requirements gathering system for Claude Code that progressively builds context through automated discovery, asks simple yes/no questions, and generates comprehensive requirements documentation.
+An intelligent requirements gathering system that combines slash commands and MCP server for Claude Code. It progressively builds context through automated discovery, asks simple yes/no questions, and generates comprehensive requirements documentation.
 
 ## 🎯 Overview
 
@@ -10,8 +10,42 @@ This system transforms the requirements gathering process by:
 - **Two-Phase Questioning**: 5 high-level questions for context, then 5 expert questions after code analysis  
 - **Automated Documentation**: Generates comprehensive specs with specific file paths and patterns
 - **Product Manager Friendly**: No code knowledge required to answer questions
+- **MCP Server Support**: Available as both slash commands and MCP tools
+- **Complete Development Loop**: New `/synthesize` command transforms requirements into implementation
 
 ## 🚀 Quick Start
+
+### Option 1: Using MCP Server (Recommended)
+
+**Install via npm:**
+```bash
+# Test it works
+npx claude-code-requirements
+
+# Add to Claude Desktop config
+```
+
+Add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "claude-code-requirements": {
+      "command": "npx",
+      "args": ["claude-code-requirements"]
+    }
+  }
+}
+```
+
+Then use the MCP tools:
+- `requirements-start` - Begin gathering requirements
+- `requirements-status` - Check progress  
+- `requirements-current` - View active requirement
+- `requirements-end` - Complete/cancel session
+- `requirements-list` - List all requirements
+- `requirements-remind` - Get workflow reminder
+
+### Option 2: Using Slash Commands
 
 ```bash
 # Start gathering requirements for a new feature
@@ -29,6 +63,9 @@ This system transforms the requirements gathering process by:
 # End current requirement gathering
 /requirements-end
 
+# Generate implementation plan from completed requirements
+/synthesize
+
 # Quick reminder if AI strays off course
 /remind
 ```
@@ -43,7 +80,8 @@ claude-requirements/
 │   ├── requirements-current.md  # View active requirement
 │   ├── requirements-end.md      # Finalize requirement
 │   ├── requirements-list.md     # List all requirements
-│   └── requirements-remind.md   # Remind AI of rules
+│   ├── requirements-remind.md   # Remind AI of rules
+│   └── synthesize.md           # Generate implementation from requirements
 │
 ├── requirements/                 # Requirement documentation storage
 │   ├── .current-requirement     # Tracks active requirement
@@ -165,6 +203,27 @@ Reminds AI to follow requirements gathering rules.
 - Starts implementing code
 - Asks multiple questions at once
 
+### `/synthesize`
+Transforms completed requirements into actionable implementation plans.
+
+**Features:**
+- Finds most recent completed requirement automatically
+- Generates phased implementation plan
+- Creates tracked todo list with specific tasks
+- Maps tasks to requirement IDs (FR/TR)
+- Begins actual implementation with progress tracking
+
+**Example:**
+```
+/synthesize
+```
+
+**Output:**
+- Implementation plan document
+- Todo list with task IDs
+- Automatic loading into Claude's task tracker
+- Begins implementation immediately
+
 ## 🎯 Features
 
 ### Smart Defaults
@@ -205,9 +264,35 @@ Every question includes an intelligent default based on:
 
 ## 🔧 Installation
 
+### MCP Server Installation (Recommended)
+
+Install the MCP server via npm:
+
+```bash
+# Test it works
+npx claude-code-requirements
+
+# Or install globally  
+npm install -g claude-code-requirements
+```
+
+Add to your Claude Desktop configuration:
+```json
+{
+  "mcpServers": {
+    "claude-code-requirements": {
+      "command": "npx",
+      "args": ["claude-code-requirements"]
+    }
+  }
+}
+```
+
+### Slash Commands Installation
+
 1. Clone this repository:
 ```bash
-git clone https://github.com/rizethereum/claude-code-requirements-builder.git
+git clone https://github.com/ulasbilgen/claude-code-requirements-builder.git
 ```
 
 2. Copy the commands to your project:
